@@ -1,0 +1,133 @@
+---
+title: "NYPD_Shooting_Incident_Data"
+author: "Sashaank"
+date: "2025-03-17"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+```
+
+```{r}
+#load csv files for easy reproducibility
+url_NYPD <- "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+NYPD <- read.csv(url_NYPD)
+#column names of NYPD
+colnames(NYPD)
+#structure of data set
+str(NYPD)
+#summary of the raw data set from the website
+summary(NYPD)
+
+```
+```{r }
+NYPD_clean <- NYPD %>%
+  #selecting relevant columns for data analysis
+  select(OCCUR_DATE, OCCUR_TIME, BORO, PRECINCT, STATISTICAL_MURDER_FLAG, 
+         VIC_AGE_GROUP, VIC_SEX, VIC_RACE) %>%
+  mutate(
+    OCCUR_DATE = mdy(OCCUR_DATE), #converting date from chr
+    OCCUR_TIME = hms(OCCUR_TIME), #converting time from chr
+    # Convert categorical variables
+    VIC_AGE_GROUP = as.factor(VIC_AGE_GROUP),
+    VIC_SEX = as.factor(VIC_SEX),
+    VIC_RACE = as.factor(VIC_RACE),
+    BORO = as.factor(BORO),
+    STATISTICAL_MURDER_FLAG = as.logical(STATISTICAL_MURDER_FLAG), #true/false
+    Year = year(OCCUR_DATE), #extract year - helps with analysis of trends of time (over years)
+    Month = month(OCCUR_DATE, label = TRUE), #extract month (seasonal analysis? - are there more crimes during a certain season?)
+    Day = day(OCCUR_DATE), #extract day - do shootings occur during certain days more?
+    Hour = hour(OCCUR_TIME), #extract time - at specific times of the day?
+    Shootings = 1 #count
+  )
+#data structure after cleaning the dataset
+str(NYPD_clean)
+#summary of the dataset
+summary(NYPD_clean)
+
+```
+
+```{r}
+NYPD_clean %>%
+  ggplot(aes(x = BORO, fill = BORO)) + #fill makes it so each bar is a different color otherwise all would be same color
+  geom_bar() + #adds a bar chart
+  labs( #labels
+    title = "NYPD Shootings Incidents by Borough",
+    subtitle = "(From 2006 - To 2021)",
+    x = "NYC Boroughs",
+    y = "Total Number of Shootings",
+  ) +
+  theme_minimal() #removes background grid / makes it easier to read 
+
+```
+
+```{r}
+NYPD_hour <- NYPD_clean %>%
+  group_by(Hour) %>%
+  summarize(Total_Shootings = sum(Shootings))
+
+# Plot
+ggplot(NYPD_hour, aes(x = Hour, y = Total_Shootings)) +
+  geom_line(color = "red", size = 1) +  # Line plot to show hourly trends
+  geom_point(color = "blue", size = 3) +  # Points to mark exact values
+  labs(
+    title = "Shootings by Time of Day",
+    subtitle = "Hourly Distribution of Shootings (2006-2021)",
+    x = "Hour of the Day (24-hour)",
+    y = "Total Shootings",
+  ) +
+  theme_minimal()
+```
+
+```{r}
+
+NYPD_year <- NYPD_clean %>%
+  group_by(Year) %>% #grouping data by year col
+  summarize(Shootings = sum(Shootings)) #adds up all shootings (counts) for year 
+  ungroup(NYPD_year)
+
+NYPD_year %>%
+  ggplot(aes(x = as.factor(Year), y = Shootings)) + #keep year as x axis, y as shootings since we're not using geom_bar now
+  geom_point(color = "blue") + #color chosesn as blue for geom_point since it's a scatter point chart
+  labs( #labels
+    title = "NYPD Shooting Incidents by Year",
+    x = "Year",
+    y = "Total Shootings",
+  ) +
+  theme_minimal() #removes background grid / makes it easier to read 
+
+```
+
+
+
+
+
+```{r}
+NYPD_boro_year <- NYPD_clean %>%
+  group_by(BORO, Year) %>% #grouping by first borough then year
+  summarize(Shootings = sum(Shootings)) #adds up all shootings/counts for each {bourough & year group}
+  ungroup(NYPD_boro_year) #ungroup data after summarizing as this good practice
+
+NYPD_boro_year %>%
+  #color = BORO --> so we can see each total per borough per year
+  ggplot(aes(x = Year, y = Shootings, color = BORO)) + #plotting with x-axis = year(has boroughs) and y-axis = shootings/counts
+  geom_line() + #connects data points (line plot)
+  geom_point() + #adds individual points like a scatter chart
+  labs( #labels
+    title = "NYPD Shootings by Borough Over Time",
+    subtitle = "(2006 - 2021)",
+    x = "Year",
+    y = "Number of Shootings",
+  ) +
+  theme_minimal() #removes background grid / makes it easier to read 
+
+```
+
+In conclusion, the analysis of the NYPD shooting incidents from 2006 to 2021 provides some key insights into the way the shootings across different boroughs and years have changed. Brooklyn and the Bronx consistently had the highest number of incidents - suggesting a higher rate of crime whereas Staten Island had the least. The total number of shootings also fluctuated over the years and was noticeable that during the COVID era - that the number of shootings across the board was much lower in each borough. 
+A potential source of bias could be that the dataset relies on NYPD reportings and not other unrepresented parties such as hospital records etc. COVID-19 lockdowns could have influenced the trends. The dataset does not also account for population changes in each of the boroughs which could also have an impact the true shooting numbers across the board.
